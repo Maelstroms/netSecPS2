@@ -9,6 +9,7 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 import argparse
 import sys
+from functools import partial
 import __future__
 
 backend = default_backend()
@@ -20,8 +21,8 @@ def arguments(arglist):
   parser.add_argument('-d', dest='decrypt', action='store_true', help='decrypt message')
   # parser.add_argument('destination_key_filename')
   # parser.add_argument('sender_key_filename')
-  parser.add_argument('input_file')
-  parser.add_argument('output_file')
+  # parser.add_argument('input_file')
+  # parser.add_argument('output_file')
   return parser.parse_args(arglist)
 
 def main(args):
@@ -30,42 +31,38 @@ def main(args):
     print("encryption")
     #cypher key
     key = os.urandom(32)
-    print("key " + key + "\n")
     #CBC initiation vector
     iv = os.urandom(16)
-    print("iv " + iv + "\n")
     cipher = Cipher(algorithms.AES(key), modes.CTR(iv), backend=backend)
     encryptor = cipher.encryptor()
-    decryptor = cipher.decryptor()
-    cipherString = ''
-    inPlainFile = open(args.input_file, 'r+')
-    outCypherFile = open(args.output_file, 'r+')
-    # outCypherFile.write(key+"\n")
-    # outCypherFile.write(iv+"\n")
-    # for line in inPlainFile:
-    #   cipherString = encryptor.update(line)
-    #   outCypherFile.write(cipherString)
-        #print line
-    outCypherFile.write(encryptor.update(b"a secret message") + encryptor.finalize())
-    print(outCypherFile.readline())
-    inPlainFile.close()
-    outCypherFile.close()
+    inPlainfile= open('input_plain_text.txt', 'r+')
+    outCypherfile= open('cypherText.txt', 'r+')
+    outPlainFile = open('output_plain_text.txt', 'r+')
+    for chunk in iter(partial(inPlainfile.read, 1024), ''):
+      cypherText = encryptor.update(chunk)
+      outCypherfile.write(cypherText)
+    ct = encryptor.update(b"a secret message") + encryptor.finalize()
 
-    # doubleCheck = open(args.output_file, 'r+')
-    # for line in doubleCheck:
+
+    print"""break break break break break break break break break \n\n
+break break break break break break break break break \n\n
+break break break break break break break break break \n\n
+break break break break break break break break break \n\n
+=============================================================="""
+
+    decryptor = cipher.decryptor()
+    outCypherfile.seek(0)
+    for chunk in iter(partial(outCypherfile.read, 1024), ''):
+      plainText = decryptor.update(chunk)
+      outPlainFile.write(plainText)
+    print(decryptor.update(ct) + decryptor.finalize())
+    # outPlainFile.seek(0)
+    # for line in outPlainFile:
     #   print(line)
 
-    #TODO DELETE symetric decryption test before RSA implementation
-    inCypherFile = open(args.output_file, 'r+')
-    outPlainFile = open('output_plain_text.txt' , 'r+')
-    # for line in inCypherFile:
-    #   print line
-    #   outPlainFile.write(decryptor.update(line))
-    outPlainFile.write(inCypherFile.readline() + decryptor.finalize())
 
-    for line in outPlainFile:
-      print line
-    inCypherFile.close()
+    inPlainfile.close()
+    outCypherfile.close()
     outPlainFile.close()
 
   #decription flag set
