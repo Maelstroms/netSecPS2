@@ -16,6 +16,7 @@ import argparse
 import sys
 from functools import partial
 import json
+import ast
 import __future__
 
 backend = default_backend()
@@ -63,11 +64,10 @@ def main(args):
     message = b"A message I want to sign"
     signer.update(message)
     signature = signer.finalize()
-
     outgoingPackage = {}
-    outgoingPackage["signature"] = signature
-    #key
-    outgoingPackage["message"] = message
+    outgoingPackage["signature"] = str(signature)
+    #key goes here in the message slot
+    outgoingPackage["message"] = str(message)
 
     outCypherfile.write(str(outgoingPackage))
     outCypherfile.close()
@@ -127,7 +127,11 @@ def main(args):
       backend=default_backend())
 
 
-    signature = json.dumps(inCypherfile.readline())
+    textOut = ast.literal_eval(inCypherfile.readline())
+    print textOut
+    signature = textOut["signature"]
+    message = textOut["message"]
+
 
     verifier = public_key.verifier(signature,padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
       salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256())
@@ -135,8 +139,10 @@ def main(args):
     verifier.update(message)
     verifier.verify()
 
-    # inCypherfile.close()
-    # outPlainFile.close()
+
+
+    inCypherfile.close()
+    outPlainFile.close()
 
 
 
