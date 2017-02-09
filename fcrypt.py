@@ -1,10 +1,10 @@
 #expected command line call
 #for encryption
 #python fcrypt.py -e destination_public_key_filename sender_private_key_filename input_plaintext_file ciphertext_file
-#python fcrypt.py -e receiverPublicKey.pem senderPrivateKey.pem input_plain_text.txt cypherText.txt
+#python fcrypt.py -e receiverPublicKey.pem senderPrivateKey.pem input_plain_text.txt cipherText.txt
 #for decryption
 #python fcrypt.py -d destination_private_key_filename sender_public_key_filename ciphertext_file output_plaintext_file
-#python fcrypt.py -d receiverPrivateKey.pem senderPublicKey.pem cypherText.txt output_plain_text.txt
+#python fcrypt.py -d receiverPrivateKey.pem senderPublicKey.pem cipherText.txt output_plain_text.txt
 #hmac message authentication
 # message should be in json format
 import os
@@ -39,7 +39,13 @@ def main(args):
     print("encryption")
     #RSA key testing
     inPlainfile= open(args.input_file, 'r+b')
-    outCypherfile= open(args.output_file, 'r+b')
+    outCipherfile= open(args.output_file, 'r+b')
+
+    # for line in inPlainfile:
+    #   if next(inPlainfile,'') == '':
+    #     print "it works"
+    #   else:
+    #     continue
 
     with open(args.sender_key_filename, "rb") as key_file:
       private_key = serialization.load_pem_private_key(
@@ -60,59 +66,50 @@ def main(args):
       hashes.SHA256())
 
 
+    #begin symetric encryption
+    # cipher key
+    key = os.urandom(32)
+    #CBC initiation vector
+    iv = os.urandom(16)
 
-    message = b"A message I want to sign"
-    signer.update(message)
+     #key goes here in the message slot
+    cipherKey = public_key.encrypt(key, padding.OAEP(
+         mgf=padding.MGF1(algorithm=hashes.SHA1()),
+         algorithm=hashes.SHA1(),
+         label=None))
+
+    signer.update(cipherKey)
     signature = signer.finalize()
     outgoingPackage = {}
     outgoingPackage["signature"] = str(signature)
-    #key goes here in the message slot
-    outgoingPackage["message"] = str(message)
+    outgoingPackage["key"] = str(cipherKey)
+    outgoingPackage["IV"] = str(iv)
 
-    outCypherfile.write(str(outgoingPackage))
-    outCypherfile.close()
+    outCipherfile.write(str(outgoingPackage)+"\n")
+
+    cipher = Cipher(algorithms.AES(key), modes.CTR(iv), backend=backend)
+    # cipher2 = Cipher(algorithms.AES(key), modes.CTR(iv), backend=backend)
+    encryptor = cipher.encryptor()
+    # decryptor = cipher2.decryptor()
+
+
+    inPlainfile.seek(0)
+    for chunk in iter(partial(inPlainfile.read, 1024), ''):
+      cipherText = encryptor.update(chunk)
+      outCipherfile.write(cipherText)
+    ct = '' + encryptor.finalize()
+    outCipherfile.write(ct)
+
+    outCipherfile.close()
     inPlainfile.close()
 
-
-
-
-
-
-
-
-    #cypher key
-    # key = os.urandom(32)
-    # #CBC initiation vector
-    # iv = os.urandom(16)
-    # cipher = Cipher(algorithms.AES(key), modes.CTR(iv), backend=backend)
-    # encryptor = cipher.encryptor()
-    #
-
-    # outPlainFile = open('output_plain_text.txt', 'r+')
-    # for chunk in iter(partial(inPlainfile.read, 1024), ''):
-    #   cypherText = encryptor.update(chunk)
-    #   outCypherfile.write(cypherText)
-    # ct = encryptor.update(b"a secret message") + encryptor.finalize()
-
-
-    # decryptor = cipher.decryptor()
-    # outCypherfile.seek(0)
-    # for chunk in iter(partial(outCypherfile.read, 1024), ''):
-    #   plainText = decryptor.update(chunk)
-    #   outPlainFile.write(plainText)
-    # print(decryptor.update(ct) + decryptor.finalize())
-    # outPlainFile.seek(0)
-    # for line in outPlainFile:
-    #   print(line)
-    #
-    #
 
   #decription flag set
   elif args.decrypt:
     print("decryption")
 
     #RSA Verification
-    inCypherfile = open(args.input_file, 'r+b')
+    inCipherfile = open(args.input_file, 'r+b')
     outPlainFile = open(args.output_file, 'r+b')
 
     with open(args.destination_key_filename, "rb") as key_file:
@@ -127,21 +124,42 @@ def main(args):
       backend=default_backend())
 
 
-    textOut = ast.literal_eval(inCypherfile.readline())
-    print textOut
+    textOut = ast.literal_eval(inCipherfile.readline())
     signature = textOut["signature"]
-    message = textOut["message"]
+    decrypKey = textOut["key"]
+    iv = textOut["IV"]
 
 
     verifier = public_key.verifier(signature,padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
       salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256())
 
-    verifier.update(message)
+    #signature verification
+    verifier.update(decrypKey)
     verifier.verify()
 
+    #RSA decryption of key
+    key = private_key.decrypt(
+     decrypKey,
+     padding.OAEP(
+         mgf=padding.MGF1(algorithm=hashes.SHA1()),
+         algorithm=hashes.SHA1(),
+         label=None))
 
 
-    inCypherfile.close()
+    #begin symetric decryption
+    cipher = Cipher(algorithms.AES(key), modes.CTR(iv), backend=backend)
+    decryptor = cipher.decryptor()
+    for chunk in iter(partial(inCipherfile.read, 1024), ''):
+      if chunk == '':
+        outPlainFile.write(decryptor.update(chunk) + decryptor.finalize())
+        break
+      plainText = decryptor.update(chunk)
+      outPlainFile.write(plainText)
+    outPlainFile.seek(0)
+    for line in outPlainFile:
+      print(line)
+
+    inCipherfile.close()
     outPlainFile.close()
 
 
