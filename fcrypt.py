@@ -24,8 +24,10 @@ backend = default_backend()
 #argparse library to handle arguments
 def arguments(arglist):
   parser = argparse.ArgumentParser(description='encryption and decryption protocol')
-  parser.add_argument('-e', dest='encrypt', action='store_true', help='encrypt message')
-  parser.add_argument('-d', dest='decrypt', action='store_true', help='decrypt message')
+  parser.add_argument('-e', dest='encrypt', action='store_true', help='''encrypt message:
+    python fcrypt.py -e destination_public_key_filename sender_private_key_filename input_plaintext_file ciphertext_file''')
+  parser.add_argument('-d', dest='decrypt', action='store_true', help='''decrypt message:
+    python fcrypt.py -d receiverPrivateKey.pem senderPublicKey.pem cipherText.txt output_plain_text.txt''')
   parser.add_argument('destination_key_filename')
   parser.add_argument('sender_key_filename')
   parser.add_argument('input_file')
@@ -34,18 +36,11 @@ def arguments(arglist):
 
 def main(args):
   #encryption flag is set
-  #remember to encrypt with receiver public key
   if args.encrypt:
     print("encryption")
     #RSA key testing
     inPlainfile= open(args.input_file, 'r+b')
     outCipherfile= open(args.output_file, 'r+b')
-
-    # for line in inPlainfile:
-    #   if next(inPlainfile,'') == '':
-    #     print "it works"
-    #   else:
-    #     continue
 
     with open(args.sender_key_filename, "rb") as key_file:
       private_key = serialization.load_pem_private_key(
@@ -65,18 +60,13 @@ def main(args):
       salt_length=padding.PSS.MAX_LENGTH),
       hashes.SHA256())
 
-
-    #begin symetric encryption
     # cipher key
     key = os.urandom(32)
     #CBC initiation vector
     iv = os.urandom(16)
 
-     #key goes here in the message slot
-    cipherKey = public_key.encrypt(key, padding.OAEP(
-         mgf=padding.MGF1(algorithm=hashes.SHA1()),
-         algorithm=hashes.SHA1(),
-         label=None))
+    #Key encryption for transmision
+    cipherKey = public_key.encrypt(key, padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA1()),algorithm=hashes.SHA1(),label=None))
 
     signer.update(cipherKey)
     signature = signer.finalize()
@@ -85,14 +75,15 @@ def main(args):
     outgoingPackage["key"] = str(cipherKey)
     outgoingPackage["IV"] = str(iv)
 
+    #Put the signature, key, and IV on the first line so we know where to find them
     outCipherfile.write(str(outgoingPackage)+"\n")
 
+    #begin symetric encryption
+    #prepare cipher and encryptor
     cipher = Cipher(algorithms.AES(key), modes.CTR(iv), backend=backend)
-    # cipher2 = Cipher(algorithms.AES(key), modes.CTR(iv), backend=backend)
     encryptor = cipher.encryptor()
-    # decryptor = cipher2.decryptor()
 
-
+    #make sure we start at the begining of the file
     inPlainfile.seek(0)
     for chunk in iter(partial(inPlainfile.read, 1024), ''):
       cipherText = encryptor.update(chunk)
@@ -100,6 +91,7 @@ def main(args):
     ct = '' + encryptor.finalize()
     outCipherfile.write(ct)
 
+    #close files
     outCipherfile.close()
     inPlainfile.close()
 
@@ -123,7 +115,7 @@ def main(args):
       key_file.read(),
       backend=default_backend())
 
-
+    # need ast to put the string read into the correct format
     textOut = ast.literal_eval(inCipherfile.readline())
     signature = textOut["signature"]
     decrypKey = textOut["key"]
@@ -159,17 +151,13 @@ def main(args):
     for line in outPlainFile:
       print(line)
 
+    #close files
     inCipherfile.close()
     outPlainFile.close()
 
 
-
-
-
-
-
   else:
-    print("oops")
+    print("Please refer to documentation for correct usage")
 
 
 

@@ -1,0 +1,8 @@
+Justification for Algorithms, key sizes, and modes.
+The first decision I came to was to use the CTR mode. I knew it was secure and it made saving the data to file easier because it made a stream of data. Furthermore it did not require padding, so I had one less function to worry about.
+
+I chose the AES algorithm because we had seen it in class and the documentation deemed it about as secure as the other options. It is efficient even on low power systems and does not have a constant known attack yet.
+
+The key size was the largest I could encode in the RSA encryption. There seems to be a known bug that limits the size of keys that can be encoded by this implementation of RSA. There does not seem to be a time table to fix it.
+
+The iv had to be a specific size depending on the key, so I was forced to leave them both alone.
